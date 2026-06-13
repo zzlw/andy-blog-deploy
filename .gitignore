@@ -1,0 +1,18 @@
+# 敏感配置：密钥/密码集中在 .env.production.local，只存放在服务器上（chmod 600）
+# .env.development / .env.production 不含敏感值，显式保留提交
+.env
+.env.*
+!.env.development
+!.env.production
+!.env.production.local.example
+
+# 凭证与密钥文件
+*.pem
+*.key
+*.p12
+credentials*.json
+
+# HTTPS 证书
+nginx/certs/
+
+.DS_Store

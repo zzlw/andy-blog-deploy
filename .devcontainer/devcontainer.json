@@ -1,0 +1,36 @@
+{
+  "name": "andy-blog (api)",
+  // 复用 docker-compose 编排：Dev Container 附着到 api 服务，
+  // mongo / redis / minio / web / admin 同时被拉起，开箱即用
+  "dockerComposeFile": [
+    "../docker-compose.yml",
+    "../docker-compose.override.yml"
+  ],
+  "service": "api",
+  "workspaceFolder": "/app",
+  // bind mount 的属主与容器用户不一致时，git 会报 dubious ownership，统一放行
+  "postCreateCommand": "git config --global --add safe.directory '*'",
+  // 不覆盖容器启动命令，保持 nodemon 热重载运行
+  "overrideCommand": false,
+  // 注意：不要配置 forwardPorts——所有端口已由 docker-compose 的 ports 发布到宿主机，
+  // forwardPorts 会在 127.0.0.1 上抢占同名端口并错误地转发进 api 容器（其他服务的端口会变成空响应）
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker",
+        "mongodb.mongodb-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        // 端口全部由 compose 显式发布（3000/3001/3002...），关闭 IDE 自动转发：
+        // 否则 IDE 会解析终端里 vite 打印的 "Local: http://localhost:8080/"，
+        // 自动转发容器内部端口并打开浏览器（8080 不是宿主机的正确地址，应访问 3002）
+        "remote.autoForwardPorts": false
+      }
+    }
+  },
+  // 关闭窗口时停掉整个 compose，避免后台残留
+  "shutdownAction": "stopCompose",
+  "remoteUser": "node"
+}

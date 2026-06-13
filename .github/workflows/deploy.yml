@@ -1,0 +1,56 @@
+# =============================================================
+# CD：SSH 到服务器执行 scripts/deploy.sh（pull 新镜像 + 滚动更新单个服务）
+# 触发方式：
+#   1. repository_dispatch —— 应用仓库（koa/nuxt/admin）CI 推完镜像后自动触发
+#   2. workflow_dispatch  —— 手动触发，可指定任意历史 sha-xxxxxxx tag 实现回滚
+#
+# 需要配置的 Secrets：
+#   SSH_HOST  服务器地址
+#   SSH_USER  部署用户（需在 docker 组）
+#   SSH_KEY   部署专用 SSH 私钥（建议单独生成，只放公钥到服务器）
+#
+# 服务器前置（一次性）：
+#   1. git clone 本仓库到 /opt/andy-blog，配好 .env.production.local
+#   2. docker login <ACR_REGISTRY>（凭证会被 docker 记住）
+# =============================================================
+name: Deploy
+
+on:
+  repository_dispatch:
+    types: [deploy]
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 要部署的服务
+        required: true
+        type: choice
+        options: [api, web, admin, all]
+      tag:
+        description: 镜像 tag（latest 或 sha-xxxxxxx，用于回滚）
+        required: true
+        default: latest
+
+# 串行部署：多个仓库同时推镜像时排队执行，避免并发操作服务器
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH 部署
+        uses: appleboy/ssh-action@v1
+        env:
+          SERVICE: ${{ github.event.client_payload.service || inputs.service }}
+          TAG: ${{ github.event.client_payload.tag || inputs.tag }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          envs: SERVICE,TAG
+          script: |
+            set -e
+            cd /opt/andy-blog
+            git pull --ff-only
+            sh scripts/deploy.sh "$SERVICE" "$TAG"

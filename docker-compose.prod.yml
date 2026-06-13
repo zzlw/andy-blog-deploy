@@ -1,0 +1,88 @@
+# =============================================================
+# 生产环境覆盖文件
+# 用法：docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#        --env-file .env.production --env-file .env.production.local up -d --build
+# （.env.production 随仓库提交存非敏感配置；.env.production.local 仅存服务器，放密钥/密码）
+# 业务容器不直接暴露端口，统一由 gateway（nginx）对外
+# =============================================================
+services:
+  mongo:
+    restart: always
+
+  redis:
+    restart: always
+
+  api:
+    restart: always
+    environment:
+      NODE_ENV: production
+
+  web:
+    restart: always
+
+  admin:
+    restart: always
+
+  # 统一入口网关：按域名分发到各业务容器
+  # HTTP/3 (QUIC) 需要 nginx >= 1.25 且同时暴露 UDP 443
+  gateway:
+    image: nginx:1.27-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443/tcp"
+      - "443:443/udp"
+    environment:
+      # 域名从环境变量注入；nginx 启动时对 templates/*.template 执行 envsubst
+      BLOG_DOMAIN: ${BLOG_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN}
+      # 只替换名字含 DOMAIN 的变量，保护 $host/$scheme 等 nginx 内置变量
+      NGINX_ENVSUBST_FILTER: "DOMAIN"
+    volumes:
+      # 模板目录：envsubst 后输出到镜像内 /etc/nginx/conf.d/
+      - ./nginx/templates:/etc/nginx/templates:ro
+      # 每 6 小时 reload：证书续期后自动生效（经 entrypoint.d 执行，不覆盖 command，
+      # 否则官方 entrypoint 会跳过 envsubst 模板渲染）
+      - ./nginx/entrypoint.d/90-periodic-reload.sh:/docker-entrypoint.d/90-periodic-reload.sh:ro
+      # 公共 TLS/HTTP3 片段（无占位符，直接挂载）
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      # HTTPS 证书目录（acme.sh 产物；首次启动先 make cert-selfsigned 占位）
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+      - web
+      - admin
+    networks:
+      - blog
+
+  # 证书签发/自动续期：acme.sh + 阿里云 CLI（见 ./acme/Dockerfile）
+  # - DNS-01 验证（阿里云 DNS API），签泛域名证书覆盖全部子域
+  # - daemon 模式 = 内置 cron 每天检查、到期前 30 天自动续期
+  # - 续期后自动：重装证书到 ./nginx/certs/live（网关）+ 推送到 CDN 加速域名
+  acme:
+    build: ./acme
+    restart: always
+    command: daemon
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      # 泛域名证书根域（签 BASE_DOMAIN + *.BASE_DOMAIN）
+      BASE_DOMAIN: ${BASE_DOMAIN}
+      # 阿里云 RAM AccessKey：DNS-01 验证 + CDN 证书推送
+      # （acme.sh dns_ali 插件约定的变量名就叫 Ali_Key / Ali_Secret）
+      Ali_Key: ${ALI_KEY}
+      Ali_Secret: ${ALI_SECRET}
+      # CDN 加速域名：证书续期后自动推送（替换控制台手动上传）
+      STATIC_DOMAIN: ${STATIC_DOMAIN}
+    volumes:
+      # acme.sh 账户/证书状态（删容器不丢账户与续期配置）
+      - acme-data:/acme.sh
+      # 证书安装目录（gateway 以只读方式挂载同一目录）
+      - ./nginx/certs:/certs
+      # 签发/部署脚本：make cert-issue
+      - ./acme:/scripts:ro
+    networks:
+      - blog
+
+volumes:
+  acme-data:

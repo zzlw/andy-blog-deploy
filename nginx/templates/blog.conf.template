@@ -1,0 +1,72 @@
+# =============================================================
+# 生产统一网关模板：按域名分发到 compose 内部服务（容器名通信）
+# 域名从环境变量注入：nginx 官方镜像启动时对 /etc/nginx/templates/*.template
+# 执行 envsubst，输出到 /etc/nginx/conf.d/。仅替换 ${BLOG_DOMAIN} 等占位符，
+# 不会动 $host / $scheme 等 nginx 内置变量（见 compose 的 NGINX_ENVSUBST_FILTER）。
+#
+# 协议栈：HTTP/1.1 + HTTP/2 (TCP 443) + HTTP/3 (QUIC, UDP 443)
+# 证书：acme.sh 自动签发/续期（见 docker-compose.prod.yml 的 acme 服务）
+# =============================================================
+
+# ---------- HTTP：一律 301 到 HTTPS（证书走 DNS-01 验证，80 无需放行 ACME） ----------
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ---------- 博客前台（Nuxt SSR） ----------
+server {
+    listen 443 ssl;
+    listen 443 quic reuseport;   # reuseport 同一端口全局只能声明一次
+    http2 on;
+    server_name ${BLOG_DOMAIN};
+    include /etc/nginx/snippets/ssl.conf;
+
+    location / {
+        proxy_pass http://web:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# ---------- 后端 API（NestJS） ----------
+server {
+    listen 443 ssl;
+    listen 443 quic;
+    http2 on;
+    server_name ${API_DOMAIN};
+    include /etc/nginx/snippets/ssl.conf;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://api:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# ---------- 后台管理（静态 SPA） ----------
+server {
+    listen 443 ssl;
+    listen 443 quic;
+    http2 on;
+    server_name ${ADMIN_DOMAIN};
+    include /etc/nginx/snippets/ssl.conf;
+
+    location / {
+        proxy_pass http://admin:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

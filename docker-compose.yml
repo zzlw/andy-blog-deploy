@@ -1,0 +1,106 @@
+# =============================================================
+# 基础编排文件（环境无关的服务拓扑定义）
+# - 开发：docker compose up（自动叠加 docker-compose.override.yml）
+# - 生产：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# 服务间通信一律使用容器服务名（mongo / redis / api / web / admin）
+# =============================================================
+services:
+  mongo:
+    image: mongo:7
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval \"db.runCommand('ping').ok\" || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - blog
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - blog
+
+  # 后端 API（NestJS，andy-blog-koa 仓库 main 分支）
+  # 生产：从镜像仓库拉取 CI 构建的镜像（tag 由部署脚本写入 env）
+  # 开发：docker-compose.override.yml 覆盖为本地源码构建
+  api:
+    image: ${REGISTRY:-andy-blog}/andy-blog-api:${API_TAG:-latest}
+    environment:
+      PORT: 3000
+      MONGO_URI: mongodb://mongo:27017/andy_blog
+      REDIS_URI: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      # 空库启动时自动创建的超管账号/密码（库里有作者则忽略；不配置则用开发默认值 admin/admin123456）
+      ADMIN_INIT_NAME: ${ADMIN_INIT_NAME:-}
+      ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:-}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+      # 站点信息（用于 AI 知识库的站点/作者上下文与文章 URL 生成）
+      SITE_NAME: ${SITE_NAME:-}
+      SITE_URL: ${SITE_URL:-}
+      SITE_DESCRIPTION: ${SITE_DESCRIPTION:-}
+      SITE_KEYWORDS: ${SITE_KEYWORDS:-}
+      # 内容变更 Webhook → AI 知识库服务（surmon.me.ai / Cloudflare Workers）
+      # 二者留空则自动禁用同步，不影响主流程
+      WEBHOOK_ENDPOINT: ${WEBHOOK_ENDPOINT:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - blog
+
+  # 博客前台 SSR（andy-blog-nuxt）
+  web:
+    image: ${REGISTRY:-andy-blog}/andy-blog-web:${WEB_TAG:-latest}
+    environment:
+      # 浏览器侧走对外地址，SSR 数据预取走容器内网，互不干扰（Nuxt runtimeConfig）
+      NUXT_PUBLIC_API_BASE: ${API_BASE_URL}
+      NUXT_API_BASE_INTERNAL: http://api:3000
+      NUXT_PUBLIC_STATIC_PATH: ${STATIC_PATH}
+      # AI 对话助手服务地址（Cloudflare Workers）；留空则前台不渲染 AI 浮窗
+      NUXT_PUBLIC_AI_API_BASE: ${AI_API_BASE:-}
+    depends_on:
+      - api
+    networks:
+      - blog
+
+  # 后台管理 SPA（andy-blog-admin）
+  admin:
+    image: ${REGISTRY:-andy-blog}/andy-blog-admin:${ADMIN_TAG:-latest}
+    environment:
+      # 容器启动时渲染进 app-config.js，构建产物与环境解耦
+      API_BASE_URL: ${API_BASE_URL}
+      STATIC_PATH: ${STATIC_PATH}
+      AI_API_BASE: ${AI_API_BASE:-}
+      NGINX_PORT: 80
+    depends_on:
+      - api
+    networks:
+      - blog
+
+networks:
+  blog:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  redis-data:

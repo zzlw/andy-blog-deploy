@@ -1,0 +1,103 @@
+# =============================================================
+# 开发环境覆盖文件（docker compose up 时自动叠加，无需 -f 指定）
+# 核心思路：源码 bind mount 实现热重载；node_modules 用匿名卷
+# 隔离（容器内依赖与宿主机依赖互不污染）
+# 依赖变更后执行：docker compose up --build --renew-anon-volumes
+# =============================================================
+services:
+  mongo:
+    ports:
+      # 供 GUI 工具（Compass 等）连接
+      - "27017:27017"
+
+  redis:
+    ports:
+      # 16379 避免与宿主机本地 Redis 冲突
+      - "16379:6379"
+
+  # 本地 S3 兼容存储（仅开发环境；生产使用 AWS S3 / Cloudflare R2 等）
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      # Web 控制台
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - blog
+
+  # 一次性初始化：建桶并开放匿名读取（资源 URL 需要浏览器直接访问）
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${BUCKET} &&
+      mc anonymous set download local/$${BUCKET}
+      "
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
+      BUCKET: ${S3_BUCKET:-andy-blog}
+    networks:
+      - blog
+
+  api:
+    # 开发用本地镜像名，与生产的镜像仓库地址解耦
+    image: andy-blog-api:dev
+    build:
+      context: ../andy-blog-koa
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ../andy-blog-koa:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+      # Node 调试器端口（VS Code attach）
+      - "9229:9229"
+
+  web:
+    image: andy-blog-web:dev
+    build:
+      context: ../andy-blog-nuxt
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ../andy-blog-nuxt:/app
+      - /app/node_modules
+      - /app/.nuxt
+      - /app/.output
+    ports:
+      - "3001:3000"
+
+  admin:
+    image: andy-blog-admin:dev
+    build:
+      context: ../andy-blog-admin
+      target: dev
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ../andy-blog-admin:/app
+      - /app/node_modules
+    ports:
+      - "3002:8080"
+
+volumes:
+  minio-data:
