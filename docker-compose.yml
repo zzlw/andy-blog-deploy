@@ -60,6 +60,12 @@ services:
       # 二者留空则自动禁用同步，不影响主流程
       WEBHOOK_ENDPOINT: ${WEBHOOK_ENDPOINT:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # Google Analytics 4 访客统计（后台看板「访客统计」图）
+      # GA4_PROPERTY_ID 非敏感放 .env.production；GA4_CREDENTIALS（service account JSON 的 base64）
+      # 为密钥放 .env.production.local。二者留空则接口降级，看板展示配置引导
+      GA4_PROPERTY_ID: ${GA4_PROPERTY_ID:-}
+      GA4_CREDENTIALS: ${GA4_CREDENTIALS:-}
+      GA4_CACHE_TTL: ${GA4_CACHE_TTL:-3600}
     depends_on:
       mongo:
         condition: service_healthy
@@ -78,6 +84,8 @@ services:
       NUXT_PUBLIC_STATIC_PATH: ${STATIC_PATH}
       # AI 对话助手服务地址（Cloudflare Workers）；留空则前台不渲染 AI 浮窗
       NUXT_PUBLIC_AI_API_BASE: ${AI_API_BASE:-}
+      # Google Analytics 4 Measurement ID（G-XXXXXXXXXX）；留空则不加载统计脚本
+      NUXT_PUBLIC_GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-}
     depends_on:
       - api
     networks:
