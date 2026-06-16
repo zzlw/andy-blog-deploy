@@ -7,27 +7,33 @@
 PROD := docker compose -f docker-compose.yml -f docker-compose.prod.yml \
         --env-file .env.production --env-file .env.production.local
 
+# 关闭 BuildKit，改用传统构建器。
+# 原因：BuildKit 构建前需在线拉取 docker/dockerfile:1 前端镜像，
+# 部分镜像加速源（如阿里云）对该镜像返回 403，导致 `make dev` 直接失败。
+# 本项目 Dockerfile 未使用 BuildKit 专属语法，传统构建器完全等价。
+DEV_BUILD := DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0
+
 # 本地开发：一键启动全部服务（热重载）
 dev:
-	docker compose --env-file .env.development up --build --remove-orphans
+	$(DEV_BUILD) docker compose --env-file .env.development up --build --remove-orphans
 
 # 依赖（package.json）变更后使用：重建镜像并刷新 node_modules 匿名卷
 dev-build:
-	docker compose --env-file .env.development up --build --renew-anon-volumes --remove-orphans
+	$(DEV_BUILD) docker compose --env-file .env.development up --build --renew-anon-volumes --remove-orphans
 
 # 彻底重建：删除所有容器 → 无缓存重建全部镜像 → 刷新匿名卷并启动
 # 保留数据卷（mongo/redis/minio 数据不丢）；如需连数据一起清空请先 make clean
 rebuild:
 	docker compose --env-file .env.development down --remove-orphans
-	docker compose --env-file .env.development build --no-cache
-	docker compose --env-file .env.development up --renew-anon-volumes --remove-orphans
+	$(DEV_BUILD) docker compose --env-file .env.development build --no-cache
+	$(DEV_BUILD) docker compose --env-file .env.development up --renew-anon-volumes --remove-orphans
 
 # 危险操作：彻底重置 = 连数据卷一起删除 → 无缓存重建全部镜像 → 启动
 # 会清空 mongo/redis/minio 所有数据，相当于全新环境
 reset:
 	docker compose --env-file .env.development down -v --remove-orphans
-	docker compose --env-file .env.development build --no-cache
-	docker compose --env-file .env.development up --renew-anon-volumes --remove-orphans
+	$(DEV_BUILD) docker compose --env-file .env.development build --no-cache
+	$(DEV_BUILD) docker compose --env-file .env.development up --renew-anon-volumes --remove-orphans
 
 down:
 	docker compose --env-file .env.development down --remove-orphans
