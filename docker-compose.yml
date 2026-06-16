@@ -31,6 +31,45 @@ services:
     networks:
       - blog
 
+  # 自托管访客统计（Umami）：采集端与读数端均在本机，规避海外 API 不可达
+  # 专用 PostgreSQL，与业务库（mongo）隔离
+  umami-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD}
+      TZ: Asia/Shanghai
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - blog
+
+  # Umami 应用：对外经网关暴露（埋点脚本 + 控制台），后端经内网 http://umami:3000 读数
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@umami-db:5432/umami
+      DATABASE_TYPE: postgresql
+      APP_SECRET: ${UMAMI_APP_SECRET}
+      DISABLE_TELEMETRY: 1
+      TZ: Asia/Shanghai
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/heartbeat >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - blog
+
   # 后端 API（NestJS，andy-blog-koa 仓库 main 分支）
   # 生产：从镜像仓库拉取 CI 构建的镜像（tag 由部署脚本写入 env）
   # 开发：docker-compose.override.yml 覆盖为本地源码构建
@@ -60,12 +99,14 @@ services:
       # 二者留空则自动禁用同步，不影响主流程
       WEBHOOK_ENDPOINT: ${WEBHOOK_ENDPOINT:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
-      # Google Analytics 4 访客统计（后台看板「访客统计」图）
-      # GA4_PROPERTY_ID 非敏感放 .env.production；GA4_CREDENTIALS（service account JSON 的 base64）
-      # 为密钥放 .env.production.local。二者留空则接口降级，看板展示配置引导
-      GA4_PROPERTY_ID: ${GA4_PROPERTY_ID:-}
-      GA4_CREDENTIALS: ${GA4_CREDENTIALS:-}
-      GA4_CACHE_TTL: ${GA4_CACHE_TTL:-3600}
+      # 访客统计（后台看板「访客统计」图）：经内网调用自托管 Umami REST API
+      # WEBSITE_ID 非敏感放 .env.production；读数账号密码放 .env.production.local
+      # 任一项留空则接口降级，看板展示配置引导
+      UMAMI_API_URL: http://umami:3000
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+      UMAMI_USERNAME: ${UMAMI_API_USERNAME:-}
+      UMAMI_PASSWORD: ${UMAMI_API_PASSWORD:-}
+      UMAMI_CACHE_TTL: ${UMAMI_CACHE_TTL:-3600}
     depends_on:
       mongo:
         condition: service_healthy
@@ -84,8 +125,9 @@ services:
       NUXT_PUBLIC_STATIC_PATH: ${STATIC_PATH}
       # AI 对话助手服务地址（Cloudflare Workers）；留空则前台不渲染 AI 浮窗
       NUXT_PUBLIC_AI_API_BASE: ${AI_API_BASE:-}
-      # Google Analytics 4 Measurement ID（G-XXXXXXXXXX）；留空则不加载统计脚本
-      NUXT_PUBLIC_GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-}
+      # 自托管 Umami 埋点：脚本地址 + 网站 ID；任一留空则前台不加载统计脚本
+      NUXT_PUBLIC_UMAMI_SCRIPT_URL: ${UMAMI_SCRIPT_URL:-}
+      NUXT_PUBLIC_UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     depends_on:
       - api
     networks:
@@ -112,3 +154,4 @@ networks:
 volumes:
   mongo-data:
   redis-data:
+  umami-db-data:
