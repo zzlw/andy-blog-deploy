@@ -12,12 +12,6 @@ services:
   redis:
     restart: always
 
-  umami-db:
-    restart: always
-
-  umami:
-    restart: always
-
   api:
     restart: always
     environment:
@@ -43,7 +37,6 @@ services:
       BLOG_DOMAIN: ${BLOG_DOMAIN}
       API_DOMAIN: ${API_DOMAIN}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN}
-      UMAMI_DOMAIN: ${UMAMI_DOMAIN}
       # 只替换名字含 DOMAIN 的变量，保护 $host/$scheme 等 nginx 内置变量
       NGINX_ENVSUBST_FILTER: "DOMAIN"
     volumes:
@@ -60,7 +53,6 @@ services:
       - api
       - web
       - admin
-      - umami
     networks:
       - blog
 
