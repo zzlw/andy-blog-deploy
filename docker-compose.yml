@@ -62,6 +62,9 @@ services:
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
       # 自建访客统计（基于 MongoDB，无外部依赖）：看板读数缓存秒数，可选
       ANALYTICS_CACHE_TTL: ${ANALYTICS_CACHE_TTL:-300}
+      # 微信 JS-SDK 分享签名（已认证服务号）。留空则 /api/wechat/signature 返回 enabled:false
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
     depends_on:
       mongo:
         condition: service_healthy
