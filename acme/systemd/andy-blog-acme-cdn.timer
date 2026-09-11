@@ -1,0 +1,10 @@
+[Unit]
+Description=每天检查 andy-blog CDN 证书是否该续期
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+Persistent=true
+RandomizedDelaySec=20m
+
+[Install]
+WantedBy=timers.target

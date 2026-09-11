@@ -1,0 +1,11 @@
+[Unit]
+Description=andy-blog CDN 证书续期（acme.sh DNS-01，只推 static.jiawen.live）
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/andy-blog
+# --no-deps：不要顺带拉起旧 Nginx gateway
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --env-file .env.production.local run --rm --no-deps acme acme.sh --cron
+Nice=10

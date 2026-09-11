@@ -88,6 +88,15 @@ services:
       - blog
       - pier-net
 
+  # Nuxt 不会托管构建后挂进去的根路径文件；微信/站点校验走这个小 nginx
+  verify:
+    image: nginx:1.27-alpine
+    restart: always
+    volumes:
+      - ./nginx/static:/usr/share/nginx/html:ro
+    networks:
+      - pier-net
+
   admin:
     image: ${REGISTRY:-andy-blog}/andy-blog-admin:${ADMIN_TAG:-latest}
     restart: always

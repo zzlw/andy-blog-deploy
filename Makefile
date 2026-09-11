@@ -71,15 +71,15 @@ cert-selfsigned:
 # 首次签发真证书（Let's Encrypt，阿里云 DNS-01 验证，泛域名）
 # 签发后自动：安装到网关证书目录 + 绑定到 OSS 自定义域名
 cert-issue:
-	$(ACME) exec acme sh /scripts/issue.sh
+	$(ACME) run --rm --no-deps acme sh /scripts/issue.sh
 
 # 手动把当前证书重新推送到 CDN 加速域名（正常情况续期后会自动执行）
 cert-deploy-cdn:
-	$(ACME) exec acme sh /scripts/deploy-cdn.sh
+	$(ACME) run --rm --no-deps acme sh /scripts/deploy-cdn.sh
 
 # 手动强制续期（正常情况不需要，daemon 会自动续）
 cert-renew:
-	$(ACME) exec acme acme.sh --renew-all --force
+	$(ACME) run --rm --no-deps acme acme.sh --cron
 
 logs:
 	docker compose logs -f --tail=100

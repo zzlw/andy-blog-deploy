@@ -2,24 +2,24 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-Docker Compose orchestration for the **andy-blog** full‑stack personal blog ([jiawen.live](https://jiawen.live)). One repository to build and run the whole platform locally, and to deploy it to a single server with HTTPS, an Nginx gateway and zero‑downtime rolling updates driven by CI/CD.
+Docker Compose orchestration for the **andy-blog** full‑stack personal blog ([jiawen.live](https://jiawen.live)). Locally it is still a one-command Compose stack; production traffic goes through Pier Traefik, and day-to-day releases are rolling image updates from GitHub Actions.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    Internet(["Internet"]) --> GW
+    Internet(["Internet"]) --> TR
 
-    subgraph Server ["Single Server (Docker network: blog)"]
-        GW["gateway · nginx 1.27<br/>HTTP/3 · domain routing · TLS"]
-        GW --> |"jiawen.live"| WEB["web · andy-blog-nuxt (SSR)"]
-        GW --> |"admin.jiawen.live"| ADMIN["admin · andy-blog-admin (SPA)"]
-        GW --> |"api.jiawen.live"| API["api · andy-blog-koa (NestJS)"]
+    subgraph Server ["Single server (Pier + Docker)"]
+        TR["pier-traefik · Let's Encrypt HTTP-01"]
+        TR --> |"jiawen.live / www"| WEB["web · andy-blog-nuxt (SSR)"]
+        TR --> |"admin.jiawen.live"| ADMIN["admin · andy-blog-admin (SPA)"]
+        TR --> |"api.jiawen.live"| API["api · andy-blog-koa (NestJS)"]
         WEB --> |"internal SSR fetch"| API
         ADMIN --> API
         API --> MONGO[("mongo 7")]
         API --> REDIS[("redis 7")]
-        ACME["acme · acme.sh + Aliyun DNS-01<br/>wildcard cert auto-renew"] -.-> |"certs"| GW
+        ACME["acme timer · DNS-01"] -.-> |"CDN cert only"| CDN["static.jiawen.live"]
     end
 
     API -.-> |"content Webhook (HMAC)"| AI(["andy-blog-ai · Cloudflare Workers"])
@@ -29,13 +29,13 @@ flowchart TD
 
 | Service   | Image / Source                         | Role                                                                 |
 | --------- | -------------------------------------- | -------------------------------------------------------------------- |
-| `gateway` | `nginx:1.27-alpine`                    | Single entry point. Domain‑based routing, TLS, HTTP/3 (QUIC).        |
+| `pier-traefik` | Traefik installed by Pier           | Production entry point. Domain routing + Let's Encrypt HTTP-01. The old `gateway` is rollback-only. |
 | `web`     | [`andy-blog-nuxt`](https://github.com/zzlw/andy-blog-nuxt)   | SSR blog front end (Nuxt).               |
 | `admin`   | [`andy-blog-admin`](https://github.com/zzlw/andy-blog-admin) | Admin dashboard SPA (React + Ant Design).|
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API (NestJS) — CMS core.            |
 | `mongo`   | `mongo:7`                              | Primary database.                                                    |
 | `redis`   | `redis:7-alpine`                       | Cache / sessions.                                                    |
-| `acme`    | `./acme` (acme.sh + Aliyun CLI)        | DNS‑01 wildcard certificate issuance and automatic renewal.          |
+| `acme`    | `./acme` (acme.sh + Aliyun CLI)        | **CDN only**: DNS‑01 renew via a systemd timer. Origin certs come from Traefik. |
 | `minio`   | `minio/minio` *(dev only)*             | Local S3‑compatible object storage (replaces Aliyun OSS / R2 in dev).|
 
 The optional [`andy-blog-ai`](https://github.com/zzlw/andy-blog-ai) edge AI service is **not** part of this compose stack (it runs on Cloudflare Workers); the API only pushes content‑change webhooks to it.
@@ -93,15 +93,16 @@ git clone https://github.com/zzlw/andy-blog-deploy /opt/andy-blog
 cd /opt/andy-blog
 cp .env.production.local.example .env.production.local   # fill in real secrets
 chmod 600 .env.production.local
-docker login <your-registry>                             # so images can be pulled
+docker login <your-registry>
 
-make cert-selfsigned   # placeholder cert so nginx :443 can boot
-make prod              # pull images + start the full prod stack
-make cert-issue        # issue the real Let's Encrypt wildcard cert (DNS-01)
-make prod-reload       # reload nginx with the real cert
+# Production compose is docker-compose.pier.yml, with Pier owning :80/:443.
+# Do not `up` the old docker-compose.prod.yml stack (it will fight Traefik).
+make prod
 ```
 
-After this, the `acme` container checks daily and auto‑renews ~30 days before expiry; the gateway reloads every 6 hours so renewed certs take effect with no manual steps.
+Origin HTTPS is renewed by Pier Traefik (HTTP-01). The CDN cert for `static.jiawen.live` still uses acme.sh DNS-01, driven by the host timer `andy-blog-acme-cdn.timer`.
+
+Do not click Redeploy / From Git on the `andy-blog` stack in the Pier UI. Day-to-day releases use CI below.
 
 ### Day‑to‑day deploys (CI/CD)
 
@@ -118,12 +119,14 @@ Required GitHub Secrets for the deploy workflow: `SSH_HOST`, `SSH_USER`, `SSH_KE
 
 ## HTTPS / certificates
 
-TLS is handled by the `acme` service ([acme.sh](https://github.com/acmesh-official/acme.sh)) using **Aliyun DNS‑01** validation to issue a single wildcard certificate covering `BASE_DOMAIN` and `*.BASE_DOMAIN` (front end, `api`, `admin`, `static`). On renewal it both reinstalls the cert into the gateway and pushes it to the CDN/static domain automatically.
+Origin hostnames (`jiawen.live` / `www` / `api` / `admin` / `pier`) are renewed by Traefik Let's Encrypt **HTTP-01**.
+
+`static.jiawen.live` still uses [acme.sh](https://github.com/acmesh-official/acme.sh) **Aliyun DNS‑01**. Renewal only pushes the cert to CDN; it is no longer installed into Nginx.
 
 ```bash
-make cert-issue        # first issuance
-make cert-renew        # force renew (normally automatic)
-make cert-deploy-cdn   # re-push current cert to the CDN domain
+make cert-issue        # first CDN wildcard issuance
+make cert-renew        # run acme.sh --cron once
+make cert-deploy-cdn   # re-push the current cert to the CDN domain
 ```
 
 ## Make targets
@@ -134,8 +137,8 @@ make cert-deploy-cdn   # re-push current cert to the CDN domain
 | `rebuild`         | Recreate containers + no‑cache rebuild (keeps data volumes).      |
 | `reset`           | ⚠️ Rebuild **and wipe** all data volumes.                         |
 | `down` / `clean`  | Stop / stop + delete data volumes.                                |
-| `prod` / `prod-down` | Start / stop the production stack.                             |
-| `prod-reload`     | Graceful nginx reload (no dropped connections).                   |
+| `prod` / `prod-down` | Start / stop the Pier production stack (`docker-compose.pier.yml`). |
+| `prod-reload`     | Only useful after rolling back to Nginx; Traefik is the current edge. |
 | `cert-*`          | Certificate issuance / renewal / CDN deploy.                      |
 | `logs`            | Tail logs from all services.                                      |
 

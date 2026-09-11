@@ -2,24 +2,24 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**andy-blog** 全栈个人博客（[jiawen.live](https://jiawen.live)）的 Docker Compose 部署编排仓库。一套配置同时支持：本地一键拉起完整平台，以及在单台服务器上带 HTTPS、Nginx 网关、CI/CD 驱动的零停机滚动更新的生产部署。
+**andy-blog** 全栈个人博客（[jiawen.live](https://jiawen.live)）的 Docker Compose 部署编排仓库。本地仍用 Compose 一键拉起；生产入口是 Pier Traefik，日常发布由 GitHub Actions 滚动更新镜像。
 
 ## 架构
 
 ```mermaid
 flowchart TD
-    Internet(["公网"]) --> GW
+    Internet(["公网"]) --> TR
 
-    subgraph Server ["单台服务器（Docker 网络：blog）"]
-        GW["gateway · nginx 1.27<br/>HTTP/3 · 按域名分发 · TLS"]
-        GW --> |"jiawen.live"| WEB["web · andy-blog-nuxt (SSR)"]
-        GW --> |"admin.jiawen.live"| ADMIN["admin · andy-blog-admin (SPA)"]
-        GW --> |"api.jiawen.live"| API["api · andy-blog-koa (NestJS)"]
+    subgraph Server ["单台服务器（Pier + Docker）"]
+        TR["pier-traefik · Let's Encrypt HTTP-01"]
+        TR --> |"jiawen.live / www"| WEB["web · andy-blog-nuxt (SSR)"]
+        TR --> |"admin.jiawen.live"| ADMIN["admin · andy-blog-admin (SPA)"]
+        TR --> |"api.jiawen.live"| API["api · andy-blog-koa (NestJS)"]
         WEB --> |"SSR 容器内取数"| API
         ADMIN --> API
         API --> MONGO[("mongo 7")]
         API --> REDIS[("redis 7")]
-        ACME["acme · acme.sh + 阿里云 DNS-01<br/>泛域名证书自动续期"] -.-> |"证书"| GW
+        ACME["acme timer · DNS-01"] -.-> |"只推 CDN 证"| CDN["static.jiawen.live"]
     end
 
     API -.-> |"内容变更 Webhook (HMAC)"| AI(["andy-blog-ai · Cloudflare Workers"])
@@ -29,13 +29,13 @@ flowchart TD
 
 | 服务      | 镜像 / 来源                            | 职责                                                       |
 | --------- | -------------------------------------- | ---------------------------------------------------------- |
-| `gateway` | `nginx:1.27-alpine`                    | 统一入口。按域名分发、TLS、HTTP/3 (QUIC)。                 |
+| `pier-traefik` | Pier 安装的 Traefik                  | 生产入口。按域名反代、Let's Encrypt HTTP-01。旧 `gateway` 仅作回滚。 |
 | `web`     | [`andy-blog-nuxt`](https://github.com/zzlw/andy-blog-nuxt)   | 博客前台 SSR（Nuxt）。              |
 | `admin`   | [`andy-blog-admin`](https://github.com/zzlw/andy-blog-admin) | 后台管理 SPA（React + Ant Design）。|
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API（NestJS）— CMS 核心。      |
 | `mongo`   | `mongo:7`                              | 主数据库。                                                 |
 | `redis`   | `redis:7-alpine`                       | 缓存 / 会话。                                              |
-| `acme`    | `./acme`（acme.sh + 阿里云 CLI）       | DNS‑01 泛域名证书签发与自动续期。                          |
+| `acme`    | `./acme`（acme.sh + 阿里云 CLI）       | **只给 CDN** 做 DNS‑01 续期（systemd timer）。源站证由 Traefik 签发。 |
 | `minio`   | `minio/minio`（仅开发）                | 本地 S3 兼容对象存储（开发环境替代阿里云 OSS / R2）。      |
 
 可选的边缘 AI 服务 [`andy-blog-ai`](https://github.com/zzlw/andy-blog-ai) **不在**本 compose 栈内（它跑在 Cloudflare Workers 上），API 只是向它推送内容变更的 webhook。
@@ -93,15 +93,16 @@ git clone https://github.com/zzlw/andy-blog-deploy /opt/andy-blog
 cd /opt/andy-blog
 cp .env.production.local.example .env.production.local   # 填入真实密钥
 chmod 600 .env.production.local
-docker login <你的镜像仓库>                                # 以便拉取镜像
+docker login <你的镜像仓库>
 
-make cert-selfsigned   # 自签占位证书，让 nginx :443 能冷启动
-make prod              # 拉镜像 + 启动完整生产栈
-make cert-issue        # 签发真正的 Let's Encrypt 泛域名证书（DNS-01）
-make prod-reload       # 用真证书重载 nginx
+# 生产编排是 docker-compose.pier.yml，由 Pier 管入口。
+# 不要对旧的 docker-compose.prod.yml 做 up（会和 Traefik 抢 80/443）。
+make prod
 ```
 
-之后 `acme` 容器每天检查、到期前约 30 天自动续期；网关每 6 小时自动 reload，续期证书无需人工干预即可生效。
+源站 HTTPS 由 Pier Traefik（HTTP-01）自动续。CDN `static.jiawen.live` 仍用 acme.sh DNS-01，由宿主机 `andy-blog-acme-cdn.timer` 每天检查。
+
+不要在 Pier 面板对 `andy-blog` 点整栈 Redeploy / From Git。日常发布走下面的 CI。
 
 ### 日常部署（CI/CD）
 
@@ -118,11 +119,13 @@ sh scripts/deploy.sh all latest        # 全部更新到 latest
 
 ## HTTPS / 证书
 
-TLS 由 `acme` 服务（[acme.sh](https://github.com/acmesh-official/acme.sh)）通过**阿里云 DNS‑01** 验证完成，签发一张覆盖 `BASE_DOMAIN` 与 `*.BASE_DOMAIN`（前台、`api`、`admin`、`static`）的泛域名证书。续期后会自动把证书重装进网关，并推送到 CDN/静态域名。
+源站（`jiawen.live` / `www` / `api` / `admin` / `pier`）由 Traefik Let's Encrypt **HTTP-01** 续期。
+
+CDN `static.jiawen.live` 仍走 [acme.sh](https://github.com/acmesh-official/acme.sh) **阿里云 DNS‑01** 泛域名证书，续期后只推 CDN，不再安装到 Nginx。
 
 ```bash
-make cert-issue        # 首次签发
-make cert-renew        # 强制续期（一般自动完成）
+make cert-issue        # 首次签发 CDN 用泛域名证
+make cert-renew        # 跑一遍 acme.sh --cron
 make cert-deploy-cdn   # 把当前证书重新推送到 CDN 域名
 ```
 
@@ -134,8 +137,8 @@ make cert-deploy-cdn   # 把当前证书重新推送到 CDN 域名
 | `rebuild`         | 重建容器 + 无缓存重建（保留数据卷）。            |
 | `reset`           | ⚠️ 重建**并清空**所有数据卷。                     |
 | `down` / `clean`  | 停止 / 停止并删除数据卷。                         |
-| `prod` / `prod-down` | 启动 / 停止生产栈。                            |
-| `prod-reload`     | 平滑重载 nginx（不中断连接）。                   |
+| `prod` / `prod-down` | 启动 / 停止 Pier 生产栈（`docker-compose.pier.yml`）。 |
+| `prod-reload`     | 回滚到 Nginx 后才有意义；当前入口是 Traefik。   |
 | `cert-*`          | 证书签发 / 续期 / 推送 CDN。                      |
 | `logs`            | 跟踪全部服务日志。                                |
 
