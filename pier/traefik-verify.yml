@@ -1,4 +1,5 @@
-# 站点根路径校验文件（Nuxt 不托管运行时挂载的文件）
+# 站点根路径校验文件。Nuxt 不托管运行时挂进去的 public 文件，
+# 所以这条路由打到已有的 admin nginx（不要再单独起 verify 容器）。
 # 线上：/opt/pier/data/traefik/dynamic/andy-blog-verify.yml
 http:
   routers:
@@ -6,11 +7,11 @@ http:
       rule: Host(`jiawen.live`) && Path(`/70260db84715fa726d734055a5d83d0c.txt`)
       priority: 100
       entryPoints: [websecure]
-      service: blog-verify
+      service: blog-verify-file
       tls:
         certResolver: letsencrypt
   services:
-    blog-verify:
+    blog-verify-file:
       loadBalancer:
         servers:
-          - url: http://andy-blog-verify-1:80
+          - url: http://andy-blog-admin-1:80

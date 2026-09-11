@@ -88,15 +88,6 @@ services:
       - blog
       - pier-net
 
-  # Nuxt 不会托管构建后挂进去的根路径文件；微信/站点校验走这个小 nginx
-  verify:
-    image: nginx:1.27-alpine
-    restart: always
-    volumes:
-      - ./nginx/static:/usr/share/nginx/html:ro
-    networks:
-      - pier-net
-
   admin:
     image: ${REGISTRY:-andy-blog}/andy-blog-admin:${ADMIN_TAG:-latest}
     restart: always
@@ -109,6 +100,9 @@ services:
       - api
     ports:
       - "127.0.0.1:13080:80"
+    volumes:
+      # Nuxt 运行时挂载的根路径文件不对外提供；这份校验文件挂到已有的 admin nginx
+      - ./nginx/static/70260db84715fa726d734055a5d83d0c.txt:/usr/share/nginx/html/70260db84715fa726d734055a5d83d0c.txt:ro
     networks:
       - blog
       - pier-net
