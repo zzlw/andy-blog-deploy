@@ -1,5 +1,7 @@
 # =============================================================
 # CD：SSH 到服务器执行 scripts/deploy.sh（pull 新镜像 + 滚动更新单个服务）
+# 切流后 deploy.sh 只打 docker-compose.pier.yml，不要改成 Pier「From Git」或
+# POST /stacks/{id}/deploy（后者会整栈重建，含 mongo）。AI 仍在 Cloudflare Workers。
 # 触发方式：
 #   1. repository_dispatch —— 应用仓库（koa/nuxt/admin）CI 推完镜像后自动触发
 #   2. workflow_dispatch  —— 手动触发，可指定任意历史 sha-xxxxxxx tag 实现回滚

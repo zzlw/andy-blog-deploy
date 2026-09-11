@@ -39,9 +39,10 @@
 | 权威 DNS | 已改回阿里云 `dns3/dns4.hichina.com`；`ai.jiawen.live` 仍 NS 委派 Cloudflare |
 | 源站证书 | Traefik HTTP-01，Let’s Encrypt，有效至 2026-12-10（分域名各一张） |
 | CDN 证书 | `static.jiawen.live` RSA 泛域名，有效至 2026-12-10 |
-| 域名路由 | Pier 域名 API 因 `port_allocations` 为空失败；已手写 `/opt/pier/data/traefik/dynamic/andy-blog.yml`（仓库备份 `pier/traefik-andy-blog.yml`） |
-| 发布路径 | `scripts/deploy.sh` / `make prod` 已改打 `docker-compose.pier.yml`，不再拉起 gateway |
+| 域名路由 | 已写入 `port_allocations` 并登记 `jiawen.live` / `www` / `api` / `admin`；Traefik 文件 `/opt/pier/data/traefik/dynamic/6d1de67f-….yml` |
+| 发布路径 | `scripts/deploy.sh` / `make prod` 已改打 `docker-compose.pier.yml`，不再拉起 gateway。CD 仍走 Actions SSH，不要整栈 Redeploy |
 | 面板域名 | `https://pier.jiawen.live`（Let’s Encrypt）；`:8443` 仍只对出口 IP 开放 |
+| 面板项目 | 项目 `jiawen.live` 已挂上现有 compose 栈 `andy-blog`。AI 不进 Pier |
 
 ---
 
