@@ -29,7 +29,7 @@ flowchart TD
 
 | Service   | Image / Source                         | Role                                                                 |
 | --------- | -------------------------------------- | -------------------------------------------------------------------- |
-| `pier-traefik` | Traefik installed by Pier           | Production entry point. Domain routing + Let's Encrypt HTTP-01. The old `gateway` is rollback-only. |
+| `pier-traefik` | Traefik installed by Pier           | Production entry point. Domain routing + Let's Encrypt HTTP-01. |
 | `web`     | [`andy-blog-nuxt`](https://github.com/zzlw/andy-blog-nuxt)   | SSR blog front end (Nuxt).               |
 | `admin`   | [`andy-blog-admin`](https://github.com/zzlw/andy-blog-admin) | Admin dashboard SPA (React + Ant Design).|
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API (NestJS) — CMS core.            |
@@ -42,13 +42,14 @@ The optional [`andy-blog-ai`](https://github.com/zzlw/andy-blog-ai) edge AI serv
 
 ## Compose layering
 
-The stack is split into three files so the same topology serves both dev and prod:
+The stack is split like this:
 
 | File                          | When                          | Purpose                                                                 |
 | ----------------------------- | ----------------------------- | ----------------------------------------------------------------------- |
-| `docker-compose.yml`          | always                        | Environment‑agnostic service topology.                                  |
+| `docker-compose.yml`          | local dev base                | Environment‑agnostic service topology.                                  |
 | `docker-compose.override.yml` | dev (auto‑applied)            | Source bind‑mounts + hot reload, local MinIO, exposed debug ports.      |
-| `docker-compose.prod.yml`     | prod (explicit `-f`)          | `restart: always`, the `gateway` + `acme` services, no direct port exposure. |
+| `docker-compose.pier.yml`     | production apps               | web / admin / api / mongo / redis behind Traefik.                       |
+| `docker-compose.acme.yml`     | CDN renew                     | acme.sh only; does not bind 80/443.                                     |
 
 ## Configuration
 
@@ -96,7 +97,6 @@ chmod 600 .env.production.local
 docker login <your-registry>
 
 # Production compose is docker-compose.pier.yml, with Pier owning :80/:443.
-# Do not `up` the old docker-compose.prod.yml stack (it will fight Traefik).
 make prod
 ```
 
@@ -138,8 +138,7 @@ make cert-deploy-cdn   # re-push the current cert to the CDN domain
 | `reset`           | ⚠️ Rebuild **and wipe** all data volumes.                         |
 | `down` / `clean`  | Stop / stop + delete data volumes.                                |
 | `prod` / `prod-down` | Start / stop the Pier production stack (`docker-compose.pier.yml`). |
-| `prod-reload`     | Only useful after rolling back to Nginx; Traefik is the current edge. |
-| `cert-*`          | Certificate issuance / renewal / CDN deploy.                      |
+| `cert-*`          | CDN certificate issue / renew / push.                             |
 | `logs`            | Tail logs from all services.                                      |
 
 ## Related repositories

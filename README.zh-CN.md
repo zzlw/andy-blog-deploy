@@ -29,7 +29,7 @@ flowchart TD
 
 | 服务      | 镜像 / 来源                            | 职责                                                       |
 | --------- | -------------------------------------- | ---------------------------------------------------------- |
-| `pier-traefik` | Pier 安装的 Traefik                  | 生产入口。按域名反代、Let's Encrypt HTTP-01。旧 `gateway` 仅作回滚。 |
+| `pier-traefik` | Pier 安装的 Traefik                  | 生产入口。按域名反代、Let's Encrypt HTTP-01。 |
 | `web`     | [`andy-blog-nuxt`](https://github.com/zzlw/andy-blog-nuxt)   | 博客前台 SSR（Nuxt）。              |
 | `admin`   | [`andy-blog-admin`](https://github.com/zzlw/andy-blog-admin) | 后台管理 SPA（React + Ant Design）。|
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API（NestJS）— CMS 核心。      |
@@ -42,13 +42,14 @@ flowchart TD
 
 ## Compose 分层
 
-拓扑拆成三个文件，让同一套定义同时服务开发与生产：
+拓扑拆成这些文件：
 
 | 文件                          | 何时生效              | 作用                                                          |
 | ----------------------------- | --------------------- | ------------------------------------------------------------- |
-| `docker-compose.yml`          | 始终                  | 环境无关的服务拓扑。                                          |
+| `docker-compose.yml`          | 开发基础              | 环境无关的服务拓扑。                                          |
 | `docker-compose.override.yml` | 开发（自动叠加）      | 源码 bind‑mount + 热重载、本地 MinIO、暴露调试端口。          |
-| `docker-compose.prod.yml`     | 生产（显式 `-f` 指定）| `restart: always`、`gateway` 与 `acme` 服务、不直接暴露端口。  |
+| `docker-compose.pier.yml`     | 生产业务              | Traefik 后面的 web / admin / api / mongo / redis。            |
+| `docker-compose.acme.yml`     | CDN 续期              | 只跑 acme.sh，不碰 80/443。                                   |
 
 ## 配置
 
@@ -96,7 +97,6 @@ chmod 600 .env.production.local
 docker login <你的镜像仓库>
 
 # 生产编排是 docker-compose.pier.yml，由 Pier 管入口。
-# 不要对旧的 docker-compose.prod.yml 做 up（会和 Traefik 抢 80/443）。
 make prod
 ```
 
@@ -138,8 +138,7 @@ make cert-deploy-cdn   # 把当前证书重新推送到 CDN 域名
 | `reset`           | ⚠️ 重建**并清空**所有数据卷。                     |
 | `down` / `clean`  | 停止 / 停止并删除数据卷。                         |
 | `prod` / `prod-down` | 启动 / 停止 Pier 生产栈（`docker-compose.pier.yml`）。 |
-| `prod-reload`     | 回滚到 Nginx 后才有意义；当前入口是 Traefik。   |
-| `cert-*`          | 证书签发 / 续期 / 推送 CDN。                      |
+| `cert-*`          | CDN 证书签发 / 续期 / 推送。                      |
 | `logs`            | 跟踪全部服务日志。                                |
 
 ## 关联仓库

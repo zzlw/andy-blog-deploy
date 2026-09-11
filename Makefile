@@ -1,12 +1,11 @@
 # 本地一键启动 / 生产部署入口
-.PHONY: dev dev-build rebuild reset down prod prod-down prod-reload \
-        cert-selfsigned cert-issue cert-deploy-cdn cert-renew logs clean
+.PHONY: dev dev-build rebuild reset down prod prod-down \
+        cert-issue cert-deploy-cdn cert-renew logs clean
 
-# 生产 compose：Pier 栈（无 gateway）。旧 Nginx 文件只留给回滚 / 独立 acme。
-# .env.production（仓库内，非敏感）+ .env.production.local（服务器本地，密钥/密码，后者覆盖前者）
+# 生产：Pier 栈。CDN 续期用独立 acme compose，不要和业务栈混 up。
 PROD := docker compose -f docker-compose.pier.yml \
         --env-file .env.production --env-file .env.production.local
-ACME := docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+ACME := docker compose -f docker-compose.acme.yml \
         --env-file .env.production --env-file .env.production.local
 
 # 关闭 BuildKit，改用传统构建器。
@@ -45,31 +44,11 @@ down:
 prod:
 	$(PROD) pull api web admin
 	$(PROD) up -d
-	$(ACME) up -d --no-deps --build acme
 
 prod-down:
 	$(PROD) down
-	-$(ACME) stop acme
 
-# 源站证书已改由 Traefik HTTP-01 管理；此目标保留给回滚到 Nginx 时用
-prod-reload:
-	@echo "当前入口是 Pier Traefik，没有 gateway 可 reload。回滚 Nginx 后再用此目标。"
-
-# ===================== HTTPS 证书 =====================
-# 首次部署流程：make cert-selfsigned → make prod → make cert-issue → make prod-reload
-# 之后 acme 容器每天自动检查、到期前自动续期，网关每 6 小时自动 reload，无需人工干预
-
-# 生成自签占位证书：解决「无证书时 nginx 443 起不来」的冷启动问题，
-# 也可用于本地模拟生产环境调试 HTTPS/HTTP3
-cert-selfsigned:
-	mkdir -p nginx/certs/live
-	docker run --rm -v $(CURDIR)/nginx/certs/live:/out alpine/openssl req -x509 -nodes \
-		-newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 365 \
-		-keyout /out/privkey.pem -out /out/fullchain.pem \
-		-subj "/CN=self-signed-placeholder"
-
-# 首次签发真证书（Let's Encrypt，阿里云 DNS-01 验证，泛域名）
-# 签发后自动：安装到网关证书目录 + 绑定到 OSS 自定义域名
+# ===================== CDN 证书（源站由 Traefik HTTP-01 管理）=====================
 cert-issue:
 	$(ACME) run --rm --no-deps acme sh /scripts/issue.sh
 

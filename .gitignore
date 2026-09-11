@@ -12,7 +12,8 @@
 *.p12
 credentials*.json
 
-# HTTPS 证书
-nginx/certs/
+# acme.sh 安装到本地的证书副本（CDN 续期产物，勿提交私钥）
+acme/certs/*
+!acme/certs/.gitkeep
 
 .DS_Store

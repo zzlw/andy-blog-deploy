@@ -26,7 +26,7 @@ acme.sh --issue --server letsencrypt --keylength 2048 \
   -d "$BASE_DOMAIN" -d "*.$BASE_DOMAIN" \
   --renew-hook "sh /scripts/deploy-cdn.sh"
 
-echo "==> 安装证书到网关目录 /certs/live（续期后自动重装）"
+echo "==> 备份一份到 /certs/live（不装进 Traefik；CDN 用 deploy-cdn.sh）"
 mkdir -p /certs/live
 acme.sh --install-cert -d "$BASE_DOMAIN" \
   --fullchain-file /certs/live/fullchain.pem \
@@ -35,4 +35,4 @@ acme.sh --install-cert -d "$BASE_DOMAIN" \
 echo "==> 推送证书到 CDN 加速域名 $STATIC_DOMAIN"
 sh /scripts/deploy-cdn.sh
 
-echo "==> 完成。执行 make prod-reload 让网关立即生效（否则最迟 6 小时内自动 reload）"
+echo "==> 完成。源站证书由 Traefik 管理，无需 reload nginx。"

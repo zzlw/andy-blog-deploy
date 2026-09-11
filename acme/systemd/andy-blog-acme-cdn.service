@@ -6,6 +6,5 @@ Requires=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/andy-blog
-# --no-deps：不要顺带拉起旧 Nginx gateway
-ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.production --env-file .env.production.local run --rm --no-deps acme acme.sh --cron
+ExecStart=/usr/bin/docker compose -f docker-compose.acme.yml --env-file .env.production --env-file .env.production.local run --rm acme acme.sh --cron
 Nice=10

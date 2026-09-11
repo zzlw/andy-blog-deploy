@@ -1,0 +1,22 @@
+# 只给 CDN 续期。不要和 Pier 栈一起 up 出 gateway。
+name: andy-blog
+
+services:
+  acme:
+    build: ./acme
+    command: acme.sh --cron
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      BASE_DOMAIN: ${BASE_DOMAIN}
+      Ali_Key: ${ALI_KEY}
+      Ali_Secret: ${ALI_SECRET}
+      STATIC_DOMAIN: ${STATIC_DOMAIN}
+    volumes:
+      - acme-data:/acme.sh
+      - ./acme/certs:/certs
+      - ./acme:/scripts:ro
+
+volumes:
+  acme-data:
+    external: true
+    name: andy-blog_acme-data

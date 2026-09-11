@@ -1,7 +1,8 @@
 # =============================================================
 # 基础编排文件（环境无关的服务拓扑定义）
 # - 开发：docker compose up（自动叠加 docker-compose.override.yml）
-# - 生产：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# - 生产业务：docker compose -f docker-compose.pier.yml
+# - CDN 续期：docker compose -f docker-compose.acme.yml run --rm acme
 # 服务间通信一律使用容器服务名（mongo / redis / api / web / admin）
 # =============================================================
 services:

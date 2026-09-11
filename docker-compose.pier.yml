@@ -1,7 +1,7 @@
 # Pier 生产栈：无 gateway / 无 acme。入口由 Pier Traefik 反代。
 # 用法（服务器）：
 #   docker compose -f docker-compose.pier.yml --env-file .env.production --env-file .env.production.local up -d
-# acme 继续用原 prod 文件单独拉起，只负责 CDN 续期。
+# CDN 续期用 docker-compose.acme.yml，不要和本文件一起 up。
 name: andy-blog
 
 services:

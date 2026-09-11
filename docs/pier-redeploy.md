@@ -2,14 +2,14 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | **已切流。** 公网入口是 Pier Traefik；旧 Nginx 仅作回滚备用 |
+| 状态 | **已切流并收尾。** 公网入口是 Pier Traefik；旧 Nginx gateway / `docker-compose.prod.yml` 已删除 |
 | 日期 | 2026-09-11 |
 | 范围 | 阿里云北京 ECS 上的生产栈 `jiawen.live` |
 | 目标 | 用 [Pier](https://github.com/joveptesg/Pier) 接管编排与反代，业务镜像与数据不变 |
 | 访问 | SSH 为主，阿里云 CLI 做快照 / 安全组 / 探活 |
 | CLI | `aliyun configure` 配置集 `default`（账号 `1646741456677329`）。不要用 `account-b`（那是 `tzjii.com`） |
 
-本文只写方案，不包含已执行的变更。落地前须完成 [待确认事项](#10-待确认事项)。
+施工日志。回滚件（`docker-compose.prod.yml`、`nginx/templates`）已删除；CDN 续期走 `docker-compose.acme.yml`。回 ECS 快照会回到 22.04，不要当「只恢复数据」。
 
 ## 0. 施工决定（2026-09-11）
 
@@ -504,4 +504,4 @@ make prod
 - 安装：<https://github.com/joveptesg/Pier/blob/main/INSTALL.md>
 - Compose 模板说明：<https://pier.team/services/docker-compose>
 - Traefik 静态配置生成：`crates/pier-core/src/proxy/config.rs`（仅 HTTP-01）
-- 本仓库：`README.zh-CN.md`、`docker-compose.yml`、`docker-compose.prod.yml`、`scripts/deploy.sh`、`acme/issue.sh`
+- 本仓库：`README.zh-CN.md`、`docker-compose.pier.yml`、`docker-compose.acme.yml`、`scripts/deploy.sh`、`acme/issue.sh`
