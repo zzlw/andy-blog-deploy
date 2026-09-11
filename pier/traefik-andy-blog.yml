@@ -1,0 +1,48 @@
+# Pier file-provider 路由备份。线上路径：
+#   /opt/pier/data/traefik/dynamic/andy-blog.yml
+# Pier 域名 API 因 port_allocations 为空绑不上，用这份文件直接反代 pier-net 容器。
+# 不要绑 tzj-* / static / ai。
+http:
+  middlewares:
+    blog-upload:
+      buffering:
+        maxRequestBodyBytes: 20971520
+  routers:
+    blog-apex:
+      rule: Host(`jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-web
+      tls:
+        certResolver: letsencrypt
+    blog-www:
+      rule: Host(`www.jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-web
+      tls:
+        certResolver: letsencrypt
+    blog-api:
+      rule: Host(`api.jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-api
+      middlewares: [blog-upload]
+      tls:
+        certResolver: letsencrypt
+    blog-admin:
+      rule: Host(`admin.jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-admin
+      tls:
+        certResolver: letsencrypt
+  services:
+    blog-web:
+      loadBalancer:
+        servers:
+          - url: http://andy-blog-web-1:3000
+    blog-api:
+      loadBalancer:
+        servers:
+          - url: http://andy-blog-api-1:3000
+    blog-admin:
+      loadBalancer:
+        servers:
+          - url: http://andy-blog-admin-1:80
