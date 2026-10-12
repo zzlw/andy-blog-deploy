@@ -1,0 +1,15 @@
+# 线上复制到 /opt/pier/data/traefik/dynamic/gps.yml
+# 单独成文件，避免 Pier 重写 andy-blog 那份自动生成的路由时把这条冲掉。
+http:
+  routers:
+    blog-gps:
+      rule: Host(`gps.jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-gps
+      tls:
+        certResolver: letsencrypt
+  services:
+    blog-gps:
+      loadBalancer:
+        servers:
+          - url: http://andy-blog-gps-1:3000
