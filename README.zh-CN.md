@@ -14,6 +14,7 @@ flowchart TD
         TR["pier-traefik · Let's Encrypt HTTP-01"]
         TR --> |"jiawen.live / www"| WEB["web · andy-blog-nuxt (SSR)"]
         TR --> |"admin.jiawen.live"| ADMIN["admin · andy-blog-admin (SPA)"]
+        TR --> |"gps.jiawen.live"| GPS["gps · get-gps"]
         TR --> |"api.jiawen.live"| API["api · andy-blog-koa (NestJS)"]
         WEB --> |"SSR 容器内取数"| API
         ADMIN --> API

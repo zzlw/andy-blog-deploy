@@ -42,7 +42,7 @@ down:
 # 生产部署（服务器上执行）：业务镜像从镜像仓库拉取（CI 构建）
 # 日常更新走 CI/CD（scripts/deploy.sh）。acme 只负责 CDN，单独拉起。
 prod:
-	$(PROD) pull api web admin
+	$(PROD) pull api web admin gps
 	$(PROD) up -d
 
 prod-down:

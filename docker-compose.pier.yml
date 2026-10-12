@@ -107,6 +107,14 @@ services:
       - blog
       - pier-net
 
+  gps:
+    image: ${REGISTRY:-andy-blog}/andy-blog-gps:${GPS_TAG:-latest}
+    restart: always
+    ports:
+      - "127.0.0.1:13002:3000"
+    networks:
+      - pier-net
+
 networks:
   blog:
     driver: bridge

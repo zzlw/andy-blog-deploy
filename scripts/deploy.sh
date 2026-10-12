@@ -1,7 +1,7 @@
 #!/bin/sh
 # =============================================================
 # 服务器端部署脚本：更新镜像 tag → pull → 滚动更新
-# 用法：sh scripts/deploy.sh <api|web|admin|all> <tag>
+# 用法：sh scripts/deploy.sh <api|web|admin|gps|all> <tag>
 #   sh scripts/deploy.sh api sha-1a2b3c4   # 部署指定版本（也用于回滚）
 #   sh scripts/deploy.sh all latest        # 全量更新到最新
 # tag 持久化写入 .env.production.local（git 忽略）：避免弄脏仓库内的
@@ -25,9 +25,9 @@ COMPOSE="docker compose -f $PIER_COMPOSE --env-file $ENV_FILE --env-file $LOCAL_
 [ -f "$LOCAL_ENV_FILE" ] || { echo "缺少 $LOCAL_ENV_FILE，请先 cp .env.production.local.example $LOCAL_ENV_FILE 并填写密钥"; exit 1; }
 
 case "$SERVICE" in
-  api|web|admin) SERVICES=$SERVICE ;;
-  all) SERVICES="api web admin" ;;
-  *) echo "用法: deploy.sh <api|web|admin|all> <tag>"; exit 1 ;;
+  api|web|admin|gps) SERVICES=$SERVICE ;;
+  all) SERVICES="api web admin gps" ;;
+  *) echo "用法: deploy.sh <api|web|admin|gps|all> <tag>"; exit 1 ;;
 esac
 
 # 把 tag 写进 .env.production.local（API_TAG / WEB_TAG / ADMIN_TAG），不存在则追加

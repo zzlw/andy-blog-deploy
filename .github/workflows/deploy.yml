@@ -26,7 +26,7 @@ on:
         description: 要部署的服务
         required: true
         type: choice
-        options: [api, web, admin, all]
+        options: [api, web, admin, gps, all]
       tag:
         description: 镜像 tag（latest 或 sha-xxxxxxx，用于回滚）
         required: true

@@ -33,6 +33,12 @@ http:
       service: blog-admin
       tls:
         certResolver: letsencrypt
+    blog-gps:
+      rule: Host(`gps.jiawen.live`)
+      entryPoints: [websecure]
+      service: blog-gps
+      tls:
+        certResolver: letsencrypt
   services:
     blog-web:
       loadBalancer:
@@ -46,3 +52,7 @@ http:
       loadBalancer:
         servers:
           - url: http://andy-blog-admin-1:80
+    blog-gps:
+      loadBalancer:
+        servers:
+          - url: http://andy-blog-gps-1:3000
