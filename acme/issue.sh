@@ -7,7 +7,7 @@
 #   覆盖 blog/www/api/admin/static 全部子域
 # - RSA-2048：阿里云证书上传对 RSA 兼容性最好
 # - 自动化闭环：
-#   * --install-cert 配置被记录 → 每次续期后自动重装到 /certs/live（nginx 用）
+#   * --install-cert 配置被记录 → 每次续期后重装到 /certs/live，并复制给 Traefik
 #   * --renew-hook 被记录   → 每次续期后自动把新证书推送到 CDN 加速域名
 # =============================================================
 set -e
@@ -26,13 +26,14 @@ acme.sh --issue --server letsencrypt --keylength 2048 \
   -d "$BASE_DOMAIN" -d "*.$BASE_DOMAIN" \
   --renew-hook "sh /scripts/deploy-cdn.sh"
 
-echo "==> 备份一份到 /certs/live（不装进 Traefik；CDN 用 deploy-cdn.sh）"
+echo "==> 安装到 /certs/live，并复制给 Pier Traefik"
 mkdir -p /certs/live
 acme.sh --install-cert -d "$BASE_DOMAIN" \
   --fullchain-file /certs/live/fullchain.pem \
-  --key-file /certs/live/privkey.pem
+  --key-file /certs/live/privkey.pem \
+  --reloadcmd "sh /scripts/install-origin.sh"
 
 echo "==> 推送证书到 CDN 加速域名 $STATIC_DOMAIN"
 sh /scripts/deploy-cdn.sh
 
-echo "==> 完成。源站证书由 Traefik 管理，无需 reload nginx。"
+echo "==> 完成。源站与 CDN 共用这张泛域名证。"

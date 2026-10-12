@@ -15,6 +15,7 @@ services:
       - acme-data:/acme.sh
       - ./acme/certs:/certs
       - ./acme:/scripts:ro
+      - /opt/pier/data/traefik/certs:/pier-certs
 
 volumes:
   acme-data:

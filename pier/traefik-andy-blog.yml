@@ -12,33 +12,28 @@ http:
       rule: Host(`jiawen.live`)
       entryPoints: [websecure]
       service: blog-web
-      tls:
-        certResolver: letsencrypt
+      tls: {}
     blog-www:
       rule: Host(`www.jiawen.live`)
       entryPoints: [websecure]
       service: blog-web
-      tls:
-        certResolver: letsencrypt
+      tls: {}
     blog-api:
       rule: Host(`api.jiawen.live`)
       entryPoints: [websecure]
       service: blog-api
       middlewares: [blog-upload]
-      tls:
-        certResolver: letsencrypt
+      tls: {}
     blog-admin:
       rule: Host(`admin.jiawen.live`)
       entryPoints: [websecure]
       service: blog-admin
-      tls:
-        certResolver: letsencrypt
+      tls: {}
     blog-gps:
       rule: Host(`gps.jiawen.live`)
       entryPoints: [websecure]
       service: blog-gps
-      tls:
-        certResolver: letsencrypt
+      tls: {}
   services:
     blog-web:
       loadBalancer:

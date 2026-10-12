@@ -1,0 +1,12 @@
+# 线上复制到 /opt/pier/data/traefik/dynamic/wildcard.yml
+# 源站共用 acme.sh DNS-01 的 jiawen.live + *.jiawen.live。
+# 证书文件在宿主机 /opt/pier/data/traefik/certs，容器内路径如下。
+tls:
+  certificates:
+    - certFile: /data/traefik/certs/fullchain.pem
+      keyFile: /data/traefik/certs/privkey.pem
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /data/traefik/certs/fullchain.pem
+        keyFile: /data/traefik/certs/privkey.pem

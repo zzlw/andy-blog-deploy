@@ -6,8 +6,7 @@ http:
       rule: Host(`gps.jiawen.live`)
       entryPoints: [websecure]
       service: blog-gps
-      tls:
-        certResolver: letsencrypt
+      tls: {}
   services:
     blog-gps:
       loadBalancer:

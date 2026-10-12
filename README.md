@@ -36,7 +36,7 @@ flowchart TD
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API (NestJS) — CMS core.            |
 | `mongo`   | `mongo:7`                              | Primary database.                                                    |
 | `redis`   | `redis:7-alpine`                       | Cache / sessions.                                                    |
-| `acme`    | `./acme` (acme.sh + Aliyun CLI)        | **CDN only**: DNS‑01 renew via a systemd timer. Origin certs come from Traefik. |
+| `acme`    | `./acme` (acme.sh + Aliyun CLI)        | DNS‑01 wildcard. Renewal pushes CDN and copies the cert to Pier Traefik for origin. |
 | `minio`   | `minio/minio` *(dev only)*             | Local S3‑compatible object storage (replaces Aliyun OSS / R2 in dev).|
 
 The optional [`andy-blog-ai`](https://github.com/zzlw/andy-blog-ai) edge AI service is **not** part of this compose stack (it runs on Cloudflare Workers); the API only pushes content‑change webhooks to it.
@@ -101,7 +101,7 @@ docker login <your-registry>
 make prod
 ```
 
-Origin HTTPS is renewed by Pier Traefik (HTTP-01). The CDN cert for `static.jiawen.live` still uses acme.sh DNS-01, driven by the host timer `andy-blog-acme-cdn.timer`.
+Origin and CDN share one acme.sh DNS-01 wildcard (`jiawen.live` + `*.jiawen.live`). The host timer `andy-blog-acme-cdn.timer` checks daily; renewal pushes CDN and copies the cert to Pier Traefik.
 
 Do not click Redeploy / From Git on the `andy-blog` stack in the Pier UI. Day-to-day releases use CI below.
 
@@ -120,9 +120,7 @@ Required GitHub Secrets for the deploy workflow: `SSH_HOST`, `SSH_USER`, `SSH_KE
 
 ## HTTPS / certificates
 
-Origin hostnames (`jiawen.live` / `www` / `api` / `admin` / `pier`) are renewed by Traefik Let's Encrypt **HTTP-01**.
-
-`static.jiawen.live` still uses [acme.sh](https://github.com/acmesh-official/acme.sh) **Aliyun DNS‑01**. Renewal only pushes the cert to CDN; it is no longer installed into Nginx.
+Origin hostnames (`jiawen.live` / `www` / `api` / `admin` / `gps` / `pier` and other `*.jiawen.live` names) and CDN `static.jiawen.live` share one [acme.sh](https://github.com/acmesh-official/acme.sh) **Aliyun DNS‑01** wildcard. Renewal pushes the CDN cert and copies it to `/opt/pier/data/traefik/certs` for Traefik SNI. Do not set `certResolver: letsencrypt` on those routers.
 
 ```bash
 make cert-issue        # first CDN wildcard issuance

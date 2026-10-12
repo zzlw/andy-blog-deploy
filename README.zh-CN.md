@@ -36,7 +36,7 @@ flowchart TD
 | `api`     | [`andy-blog-koa`](https://github.com/zzlw/andy-blog-koa)     | REST API（NestJS）— CMS 核心。      |
 | `mongo`   | `mongo:7`                              | 主数据库。                                                 |
 | `redis`   | `redis:7-alpine`                       | 缓存 / 会话。                                              |
-| `acme`    | `./acme`（acme.sh + 阿里云 CLI）       | **只给 CDN** 做 DNS‑01 续期（systemd timer）。源站证由 Traefik 签发。 |
+| `acme`    | `./acme`（acme.sh + 阿里云 CLI）       | DNS‑01 泛域名证。续期后推 CDN，并复制给 Pier Traefik 给源站用。 |
 | `minio`   | `minio/minio`（仅开发）                | 本地 S3 兼容对象存储（开发环境替代阿里云 OSS / R2）。      |
 
 可选的边缘 AI 服务 [`andy-blog-ai`](https://github.com/zzlw/andy-blog-ai) **不在**本 compose 栈内（它跑在 Cloudflare Workers 上），API 只是向它推送内容变更的 webhook。
@@ -101,7 +101,7 @@ docker login <你的镜像仓库>
 make prod
 ```
 
-源站 HTTPS 由 Pier Traefik（HTTP-01）自动续。CDN `static.jiawen.live` 仍用 acme.sh DNS-01，由宿主机 `andy-blog-acme-cdn.timer` 每天检查。
+源站和 CDN 共用 acme.sh DNS-01 泛域名证（`jiawen.live` + `*.jiawen.live`）。宿主机 `andy-blog-acme-cdn.timer` 每天检查；续期后推 CDN，并复制到 Pier Traefik。
 
 不要在 Pier 面板对 `andy-blog` 点整栈 Redeploy / From Git。日常发布走下面的 CI。
 
@@ -120,9 +120,7 @@ sh scripts/deploy.sh all latest        # 全部更新到 latest
 
 ## HTTPS / 证书
 
-源站（`jiawen.live` / `www` / `api` / `admin` / `pier`）由 Traefik Let's Encrypt **HTTP-01** 续期。
-
-CDN `static.jiawen.live` 仍走 [acme.sh](https://github.com/acmesh-official/acme.sh) **阿里云 DNS‑01** 泛域名证书，续期后只推 CDN，不再安装到 Nginx。
+源站（`jiawen.live` / `www` / `api` / `admin` / `gps` / `pier` 以及其他 `*.jiawen.live`）和 CDN `static.jiawen.live` 共用 [acme.sh](https://github.com/acmesh-official/acme.sh) **阿里云 DNS‑01** 泛域名证书。续期后推 CDN，并复制到 `/opt/pier/data/traefik/certs`，由 Traefik 按 SNI 挂上。路由上不要再写 `certResolver: letsencrypt`。
 
 ```bash
 make cert-issue        # 首次签发 CDN 用泛域名证
